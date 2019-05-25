@@ -26,6 +26,12 @@ struct
             ["Usage: ./mix <filename>\n"]
     in
       map print out_strings; (* throwing away result of map *)
+      let
+        val c = Cell.make_cell (Cell.Plus, 34, 23, 45, 23, 00)
+      in
+        print (Cell.str_of_cell c);
+        print "\n"
+      end;
       OS.Process.success
     end
 
