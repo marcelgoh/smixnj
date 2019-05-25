@@ -7,10 +7,27 @@ end
 
 structure Mix :> MIX =
 struct
-  fun mix (arg0, argv) = (
-    print "Hello, world!\n";
-    OS.Process.success
-  )
+  fun mix (arg0, argv) =
+    let
+      val argc = List.length argv
+      val out_strings =
+        case argv of
+          [filename] =>
+            let
+              val in_stream = TextIO.openIn filename
+              fun loop ins =
+                case TextIO.inputLine ins of
+                  SOME line => line :: (loop ins)
+                | NONE => []
+            in
+              loop in_stream before TextIO.closeIn in_stream
+            end
+        | _ =>
+            ["Usage: ./mix <filename>\n"]
+    in
+      map print out_strings; (* throwing away result of map *)
+      OS.Process.success
+    end
 
-    val _ = SMLofNJ.exportFn("_build/mix", mix)
+  val _ = SMLofNJ.exportFn("_build/mix", mix)
 end
