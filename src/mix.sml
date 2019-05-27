@@ -27,9 +27,15 @@ struct
     in
       map print out_strings; (* throwing away result of map *)
       let
-        val c = Cell.make_cell (Cell.Plus, 34, 23, 45, 23, 00)
+        val c1 = Cell.make_cell (Cell.Minus, 34, 23, 45, 23, 00)
+        val c2 = Cell.make_cell (Cell.Minus, 20, 26, 07, 51, 23)
+        val c3 = Cell.make_cell (Cell.Plus, 14, 17, 00, 52, 15)
       in
-        print (Cell.str_of_cell c);
+        print (Cell.str_of_cell c1);
+        print "\n";
+        print (Cell.str_of_cell c2);
+        print "\n";
+        print (Cell.str_of_cell c3);
         print "\n"
       end;
       OS.Process.success

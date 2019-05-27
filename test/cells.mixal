@@ -1,0 +1,7 @@
+* Some tests on cells
+
+        ORIG    3000
+START   LDA     =-342523095=
+        LDX     =239537423=
+        HLT
+        END     START
