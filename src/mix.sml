@@ -24,8 +24,11 @@ struct
             end
         | _ =>
             ["Usage: ./mix <filename>\n"]
+      fun is_space c = c = #" " orelse c = #"\t" orelse c = #"\r"
+      val split_strings = map (String.tokens is_space) out_strings
+      fun print_list l = map (fn s => (print s; print " ")) l
     in
-      map print out_strings; (* throwing away result of map *)
+      map print_list split_strings; (* throwing away result of map *)
       let
         val c1 = Cell.make_cell (Cell.Minus, 34, 23, 45, 23, 00)
         val c2 = Cell.make_cell (Cell.Minus, 20, 26, 07, 51, 23)
