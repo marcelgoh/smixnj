@@ -29,6 +29,7 @@ struct
       fun print_list l = map (fn s => (print s; print " ")) l
     in
       map print_list split_strings; (* throwing away result of map *)
+      Assembler.assemble split_strings;
       let
         val c1 = Cell.make_cell (Cell.Minus, 34, 23, 45, 23, 00)
         val c2 = Cell.make_cell (Cell.Minus, 20, 26, 07, 51, 23)
