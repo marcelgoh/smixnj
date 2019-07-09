@@ -25,23 +25,15 @@ struct
         | _ =>
             ["Usage: ./mix <filename>\n"]
       fun is_space c = c = #" " orelse c = #"\t" orelse c = #"\r"
-      val split_strings = map (String.tokens is_space) out_strings
+      (* MIX does not distinguish between uppercase and lowercase letters *)
+      val all_upper = map (fn s => String.map Char.toUpper s) out_strings
+      (* a line of MIXAL is split into tokens on whitespace *)
+      val split_strings = map (String.tokens is_space) all_upper
+      (* print a list of strings -- for debugging *)
       fun print_list l = map (fn s => (print s; print " ")) l
     in
       map print_list split_strings; (* throwing away result of map *)
       Assembler.assemble split_strings;
-      let
-        val c1 = Cell.make_cell (Cell.Minus, 34, 23, 45, 23, 00)
-        val c2 = Cell.make_cell (Cell.Minus, 20, 26, 07, 51, 23)
-        val c3 = Cell.make_cell (Cell.Plus, 14, 17, 00, 52, 15)
-      in
-        print (Cell.str_of_cell c1);
-        print "\n";
-        print (Cell.str_of_cell c2);
-        print "\n";
-        print (Cell.str_of_cell c3);
-        print "\n"
-      end;
       OS.Process.success
     end
 

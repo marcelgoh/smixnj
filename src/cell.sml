@@ -16,9 +16,12 @@ sig
      c : int    (* operation code *)
    }
 
-  val make_cell : sign * int * int * int * int * int -> t
-  val value_of_cell : int * int -> t -> int
-  val str_of_cell : t -> string
+  val empty : t
+
+  val is_empty : t -> bool
+  val make : sign * int * int * int * int * int -> t
+  val value : int * int -> t -> int
+  val to_string : t -> string
 end
 
 structure Cell : CELL =
@@ -37,7 +40,16 @@ struct
      c : int    (* operation code *)
    }
 
-  fun make_cell (f0 : sign, f1, f2, f3, f4, f5) =
+  val empty = { s = Plus, a1 = 0, a2 = 0, i = 0, f = 0, c = 0 }
+
+  (* checks if a cell is positive zero *)
+  fun is_empty c =
+    case c of
+      { s = sign, a1 = f1, a2 = f2, i = f3, f = f4, c = f5 } =>
+        sign = Plus andalso f1 = 0 andalso f2 = 0 andalso
+        f3 = 0 andalso f4 = 0 andalso f5 = 0
+
+  fun make (f0 : sign, f1, f2, f3, f4, f5) =
     if f1 < 0 orelse f1 > 63 then
       raise (Cell_error "Invalid byte 1: MAKE_CELL")
     else if f2 < 0 orelse f2 > 63 then
@@ -53,7 +65,7 @@ struct
 
   fun int_exp b n = if n = 0 then 1 else (int_exp b (n - 1)) * b
 
-  fun value_of_cell (n1, n2) (cell : t) =
+  fun value (n1, n2) (cell : t) =
     if n1 > n2 orelse n1 < 0 orelse n2 > 5 then
       raise (Cell_error "Invalid slice: VALUE_OF_CELL")
     else
@@ -75,7 +87,7 @@ struct
             case pos_neg of Plus => value | Minus => ~value
           end
 
-  fun str_of_cell (cell : t) =
+  fun to_string (cell : t) =
     let
       val sign_bit =
         case (#s cell : sign) of
@@ -87,6 +99,6 @@ struct
         { s = _, a1 = f1, a2 = f2, i = f3, f = f4, c = f5 } =>
           sign_bit ^ " " ^
           (foldr op ^ "" (map print_field [f1, f2, f3, f4, f5])) ^
-          "(" ^ sign_bit ^ (Format.format "%010d" [Format.INT (value_of_cell (1, 5) cell)]) ^ ")"
+          "(" ^ sign_bit ^ (Format.format "%010d" [Format.INT (value (1, 5) cell)]) ^ ")"
     end
 end

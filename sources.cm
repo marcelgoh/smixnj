@@ -6,3 +6,4 @@ $/smlnj-lib.cm
 src/assembler.sml
 src/cell.sml
 src/mix.sml
+src/simulator.sml
