@@ -3,7 +3,7 @@
 TERM    EQU     19
 BUF     EQU     500
 * DATA
-        ORIG    2000
+I       ORIG    2000
 A       CON     0
 B       CON     1
 N       CON     0
@@ -35,4 +35,4 @@ EXIT    LDX     A                       convert answer to char
         STX     BUF+1
         OUT     BUF(TERM)
         HLT
-END     END     START
+        END     HIMBO
