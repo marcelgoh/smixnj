@@ -7,10 +7,22 @@ end
 
 structure Mix :> MIX =
 struct
+  exception File_error
+
   fun mix (arg0, argv) =
     let
       val argc = List.length argv
-      val out_strings =
+      fun is_space c = c = #" " orelse c = #"\t" orelse c = #"\r"
+      (* TextIO.inputLine returns strings that are guaranteed to terminate
+       * with newline, so this function removes it *)
+      fun remove_last_char s =
+        let
+          val len = String.size s
+        in
+          String.substring (s, 0, len - 1)
+        end
+      (* reads file and returns list of lists of strings *)
+      fun read_file () =
         case argv of
           [filename] =>
             let
@@ -19,23 +31,27 @@ struct
                 case TextIO.inputLine ins of
                   SOME line => line :: (loop ins)
                 | NONE => []
+              val out_strings = loop in_stream before TextIO.closeIn in_stream
+              (* MIX does not distinguish between uppercase and lowercase letters *)
+              val all_upper = map (fn s => String.map Char.toUpper
+                                                      (remove_last_char s))
+                                  out_strings
             in
-              loop in_stream before TextIO.closeIn in_stream
+              (* a line of MIXAL is split into tokens on whitespace *)
+              map (fn line =>
+                     List.filter (fn s => s <> "") (String.tokens is_space line))
+                  all_upper
             end
-        | _ =>
-            ["Usage: ./mix <filename>\n"]
-      fun is_space c = c = #" " orelse c = #"\t" orelse c = #"\r"
-      (* MIX does not distinguish between uppercase and lowercase letters *)
-      val all_upper = map (fn s => String.map Char.toUpper s) out_strings
-      (* a line of MIXAL is split into tokens on whitespace *)
-      val split_strings = map (String.tokens is_space) all_upper
-      (* print a list of strings -- for debugging *)
-      fun print_list l = map (fn s => (print s; print " ")) l
+        | _ => (
+            print "Usage: ./mix <filename>\n";
+            raise File_error
+          )
     in
-      map print_list split_strings; (* throwing away result of map *)
-      Assembler.assemble split_strings;
+      Assembler.assemble (read_file ());  (* read file and then assemble *)
       OS.Process.success
     end
+    handle
+      File_error => OS.Process.failure
 
   val _ = SMLofNJ.exportFn("_build/mix", mix)
 end
