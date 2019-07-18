@@ -51,7 +51,15 @@ struct
       OS.Process.success
     end
     handle
-      File_error => OS.Process.failure
+      File_error => (
+        print "Error reading file; aborting.\n";
+        OS.Process.failure
+      )
+    | e : exn => (
+        print (Format.format "Fatal error: %s -- %s.\n"
+              [Format.STR (General.exnName e), Format.STR (General.exnMessage e)]);
+        OS.Process.failure
+      )
 
   val _ = SMLofNJ.exportFn("_build/mix", mix)
 end

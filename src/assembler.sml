@@ -13,6 +13,7 @@ struct
   structure A = Array
   structure H = HashTable
 
+  (* exported exception *)
   exception Assembler_error
   (* local exceptions *)
   exception End_of_file
@@ -20,6 +21,7 @@ struct
   exception Missing_symbol of int        (* line of missing symbol *)
   exception Lookup_error
   exception Undefined_symbol of string * int (* string and line *)
+  exception Parse_error of int           (* line no. *)
 
   (* the simulated MIX memory, all initialised to empty cells *)
   val memory = A.array (4000, Cell.empty)
@@ -55,6 +57,48 @@ struct
     in
       iter 0
     end
+
+  (* from a string ADDRESS[,I][(F)], returns (ADDR, SOME I, SOME F) *)
+  fun split_string str line_no =
+    let
+      val len = String.size str
+      (* given char, get index of first occurrence at or after index i in str
+       * or return NONE
+       *)
+      fun find c i =
+        if String.sub (str, i) = c then SOME i
+        else if i < len - 1 then find c (i + 1)
+             else NONE
+      (* split string on first comma found, removing comma in the process *)
+      fun split_on_comma s =
+        let
+          val l = String.size s
+        in
+          case find #"," 0 of
+            SOME i =>
+              (String.substring (s, 0, i), String.substring (s, i + 1, l - i - 1))
+          | NONE => (str, "")
+        end
+    in
+      case find #"(" 0 of
+        SOME i =>
+          if String.sub (str, len - 1) = #")" then
+            let
+              val f_part = String.substring (str, i + 1, len - i - 2)
+              val (addr, i_part) = split_on_comma (String.substring (str, 0, i))
+            in
+              (addr, i_part, f_part)
+            end
+          else (* mismatched LPAREN -- RPAREN should have been the last char *)
+            raise Parse_error line_no
+      | NONE =>
+          let
+            val (addr, i_part) = split_on_comma str
+          in
+            (addr, i_part, "")
+          end
+    end
+
 
   (* each of the following functions assembles a line of MIXAL by modifying
    * the memory array at location !curr_loc
@@ -255,7 +299,7 @@ struct
   fun assemble list_list =
     let
       (* get index of first occurrence of str in l, or NONE if not found *)
-      fun first_opt acc l str =
+      fun first_opt acc l (str : string) =
         case l of
           [] => NONE
         | s :: ss =>
@@ -282,100 +326,106 @@ struct
               iter (line_no + 1) rest
             end
         in
-        case ll of
-          [] => raise End_of_file
-        | l :: ls =>
-            if List.exists (fn x => x = "EQU") l then (
-              add_equ l;
-              next ls
-            )
-            else
-              (case first_opt 0 l "END" of
-                 SOME i =>
-                   (case List.drop (l, i + 1) of
-                      [] => raise (Bad_symbol ("END", line_no))
-                    | sym :: _ =>
-                        (case H.find symbols sym of
-                           SOME loc =>
-                             start_loc := loc (* CLEAN EXIT *)
-                         | NONE =>
-                             raise (Undefined_symbol (sym, line_no))))
-               | NONE =>
-                   (case l of
-                      [] => next ls (* line is empty *)
-                    | s1 :: drop1 =>
-                        (
-                        if String.size s1 > 0 andalso String.sub (s1, 0) = #"*" then
-                          next ls (* ignore line if asterisk at start *)
-                        else
-                          (case drop1 of
-                             [] => (* line has only one string *)
-                               (case H.find op_table s1 of
-                                  SOME f => (
-                                    print "Case 1: ";
-                                    f l;  (* call f on the whole line *)
-                                    next ls
-                                  )
-                                  | NONE => raise (Missing_symbol line_no))
-                           | s2 :: _ =>
-                               (case H.find op_table s1 of
-                                  SOME f =>
-                                    (case H.find op_table s2 of
-                                       SOME g => raise (Bad_symbol (s1, line_no))
-                                     | NONE =>
-                                         print "Case 2: ";
-                                         f l; (* no symbol, just assemble line *)
-                                         next ls)
-                                | NONE =>
-                                    (case H.find op_table s2 of
-                                       SOME f => (
-                                         add_symbol s1;
-                                         print "Case 3: ";
-                                         f drop1; (* assemble line without symbol *)
-                                         next ls
-                                       )
-                                     | NONE =>
-                                         raise (Missing_symbol line_no))))))
-                         )
+          case ll of
+            [] => raise End_of_file
+          | l :: ls =>
+              if List.exists (fn x => x = "EQU") l then (
+                add_equ l;
+                next ls
+              )
+              else
+                (case first_opt 0 l "END" of
+                   SOME i =>
+                     (case List.drop (l, i + 1) of
+                        [] => raise (Bad_symbol ("END", line_no))
+                      | sym :: _ =>
+                          (case H.find symbols sym of
+                             SOME loc =>
+                               start_loc := loc (* CLEAN EXIT *)
+                           | NONE =>
+                               raise (Undefined_symbol (sym, line_no))))
+                 | NONE =>
+                     (case l of
+                        [] => next ls (* line is empty *)
+                      | s1 :: drop1 =>
+                          (
+                          if String.size s1 > 0 andalso String.sub (s1, 0) = #"*" then
+                            next ls (* ignore line if asterisk at start *)
+                          else
+                            (case drop1 of
+                               [] => (* line has only one string *)
+                                 (case H.find op_table s1 of
+                                    SOME f => (
+                                      print "Case 1: ";
+                                      f l;  (* call f on the whole line *)
+                                      next ls
+                                    )
+                                    | NONE => raise (Missing_symbol line_no))
+                             | s2 :: _ =>
+                                 (case H.find op_table s1 of
+                                    SOME f =>
+                                      (case H.find op_table s2 of
+                                         SOME g => raise (Bad_symbol (s1, line_no))
+                                       | NONE =>
+                                           print "Case 2: ";
+                                           f l; (* no symbol, just assemble line *)
+                                           next ls)
+                                  | NONE =>
+                                      (case H.find op_table s2 of
+                                         SOME f => (
+                                           add_symbol s1;
+                                           print "Case 3: ";
+                                           f drop1; (* assemble line without symbol *)
+                                           next ls
+                                         )
+                                       | NONE =>
+                                           raise (Missing_symbol line_no))))))
+                           )
         end
+      (* for testing string-splitting *)
+      fun print_triple (addr, i_part, f_part) =
+        print (Format.format "%s %s %s\n"
+                             [Format.STR addr, Format.STR i_part, Format.STR f_part])
     in
       iter 1 list_list;
       H.appi print_entry symbols;
+      print_triple (split_string "2000" 0);
+      print_triple (split_string "HI" 0);
+      print_triple (split_string "PRIME,5" 0);
+      print_triple (split_string "TITLE(PRINTER)" 0);
+      print_triple (split_string "\"HELLO\"" 0);
+      print_triple (split_string "BUF0+10" 0);
+      print_triple (split_string "0,4(1:4)" 0);
+      print_triple (split_string "BUF+2400,2(18)" 0);
       (memory, !start_loc)
     end
     (* print appropriate error message then signal that assembly has failed *)
     handle
-      End_of_file =>
-        let
-          val _ = print "End of file reached before finding END.\n"
-        in
-          raise Assembler_error
-        end
-    | Bad_symbol (s, i) =>
-        let
-          val _ = print (Format.format "Bad symbol `%s` on line %d.\n"
-                                       [Format.STR s, Format.INT i])
-        in
-          raise Assembler_error
-        end
-    | Missing_symbol i =>
-        let
-          val _ = print (Format.format "Missing symbol on line %d.\n"
-                                       [Format.INT i])
-        in
-          raise Assembler_error
-        end
-    | Lookup_error =>
-        let
-          val _ = print "Hashtable lookup failed."
-        in
-          raise Assembler_error
-        end
-    | Undefined_symbol (s, i) =>
-        let
-          val _ = print (Format.format "Undefined symbol `%s` on line %d.\n"
-                                       [Format.STR s, Format.INT i])
-        in
-          raise Assembler_error
-        end
+      End_of_file => (
+        print "End of file reached before finding END.\n";
+        raise Assembler_error
+      )
+    | Bad_symbol (s, i) => (
+        print (Format.format "Bad symbol `%s` on line %d.\n"
+                             [Format.STR s, Format.INT i]);
+        raise Assembler_error
+      )
+    | Missing_symbol i => (
+        print (Format.format "Missing symbol on line %d.\n" [Format.INT i]);
+        raise Assembler_error
+      )
+    | Lookup_error => (
+        print "Hashtable lookup failed.";
+        raise Assembler_error
+      )
+    | Undefined_symbol (s, i) => (
+        print (Format.format "Undefined symbol `%s` on line %d.\n"
+                             [Format.STR s, Format.INT i]);
+        raise Assembler_error
+      )
+    | Parse_error i => (
+        print (Format.format "Error parsing address string on line %d.\n"
+                             [Format.INT i]);
+        raise Assembler_error
+      )
 end

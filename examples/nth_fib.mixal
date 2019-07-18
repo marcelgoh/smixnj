@@ -15,21 +15,21 @@ MSG     ALF     "ENTER"
         ALF     "00044"
 * CODE
         ORIG    3000
-START   OUT     MSG(TERM)               print message
-        IN      BUF(TERM)               get number as input
-        LDX     BUF                     convert to numeric
+START   OUT     MSG(TERM)               Print message.
+        IN      BUF(TERM)               Get number as input.
+        LDX     BUF                     Convert to numeric
         NUM
         STA     N
-        LD2     N                       initialise loop counter
-LOOP    J2NP    EXIT                    if rI2 non-positive, exit loop
-        LDA     A                       save contents of A in register
-        ADD     B                       rA <- A + B
-        ENT1    A                       store address of A
-        MOVE    B                       copy B to A
-        STA     B                       store register in B
-        DEC2    1                       decrement loop counter
+        LD2     N                       Initialise loop counter.
+LOOP    J2NP    EXIT                    If rI2 non-positive, exit loop.
+        LDA     A                       Save contents of A in register..
+        ADD     B                       rA <- A + B.
+        ENT1    A                       Store address of A.
+        MOVE    B                       Copy B to A.
+        STA     B                       Store register in B.
+        DEC2    1                       Decrement loop counter.
         JMP     LOOP
-EXIT    LDX     A                       convert answer to char
+EXIT    LDX     A                       Convert answer to char.
         CHAR
         STA     BUF
         STX     BUF+1
@@ -37,4 +37,4 @@ EXIT    LDX     A                       convert answer to char
         ENTA    I
         ENTX    A
         HLT
-        END     HIMBO
+        END     START
