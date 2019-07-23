@@ -34,7 +34,7 @@ EXIT    LDX     A                       Convert answer to char.
         STA     BUF
         STX     BUF+1
         OUT     BUF(TERM)
-        ENTA    I
-        ENTX    A
+        ENTA    A
+        ENTX    I
         HLT
         END     START

@@ -99,6 +99,17 @@ struct
           end
     end
 
+  (* currently only does literal and symbolic addresses *)
+  fun resolve_address line_no s =
+    if List.all Char.isDigit (String.explode s) then
+      case Int.fromString s of
+        SOME i => i (* we don't check [0 .. 4000) yet *)
+      | NONE => raise (Parse_error line_no)  (* shouldn't happen *)
+    else if List.all Char.isAlpha (String.explode s) then
+      case H.find symbols s of
+        SOME i => i
+      | NONE => raise (Parse_error line_no)
+    else raise (Parse_error line_no)
 
   (* each of the following functions assembles a line of MIXAL by modifying
    * the memory array at location !curr_loc
@@ -293,8 +304,6 @@ struct
 
   fun add_symbol str = H.insert symbols (str, !curr_loc)
 
-  fun add_equ line = ()
-
   (* takes a list of lists of strings and return the modified MIX memory *)
   fun assemble list_list =
     let
@@ -305,33 +314,49 @@ struct
         | s :: ss =>
             if s = str then SOME acc
             else first_opt (acc + 1) ss str
-      (* iterate down the list of lines *)
-      fun iter line_no ll =
+      fun print_list_list ls =
+        map (fn l =>
+               let
+                 val _ = print "["
+                 val _ = map (fn s => print (Format.format "\"%s\"," [Format.STR s])) l
+               in
+                 print "]\n"
+               end)
+            ls
+      (* iterate down the list of lines and fill symbol table *)
+      fun first_pass acc line_no ll =
         let
           fun print_line_no () = print (Format.format "%d\n" [Format.INT line_no])
-          fun print_list_list ls =
-            map (fn l =>
-                   let
-                     val _ = print "["
-                     val _ = map (fn s => print (Format.format "\"%s\"," [Format.STR s])) l
-                   in
-                     print "]\n"
-                   end)
-                ls
           (* increment location then call iter on rest *)
-          fun next rest =
+          fun next stripped rest =
             let
               val _ = curr_loc := !curr_loc + 1
             in
-              iter (line_no + 1) rest
+              first_pass (stripped :: acc) (line_no + 1) rest
             end
+          fun next_no_append rest =
+            let
+              val _ = curr_loc := !curr_loc + 1
+            in
+              first_pass acc (line_no + 1) rest
+            end
+          fun handle_orig ss =
+            case ss of
+              [] => raise (Parse_error line_no)
+            | s :: _ =>
+                curr_loc := resolve_address line_no s - 1 (* since we'll add 1 after *)
+          fun add_equ line =
+            case line of
+              sym :: "EQU" :: addr_str :: _ =>
+                H.insert symbols (sym, (resolve_address line_no addr_str))
+            | _ => raise (Parse_error line_no)
         in
           case ll of
             [] => raise End_of_file
           | l :: ls =>
               if List.exists (fn x => x = "EQU") l then (
                 add_equ l;
-                next ls
+                next_no_append ls
               )
               else
                 (case first_opt 0 l "END" of
@@ -340,43 +365,52 @@ struct
                         [] => raise (Bad_symbol ("END", line_no))
                       | sym :: _ =>
                           (case H.find symbols sym of
-                             SOME loc =>
-                               start_loc := loc (* CLEAN EXIT *)
+                             SOME loc => (
+                               (* CLEAN EXIT *)
+                               start_loc := loc;
+                               List.rev acc
+                             )
                            | NONE =>
                                raise (Undefined_symbol (sym, line_no))))
                  | NONE =>
                      (case l of
-                        [] => next ls (* line is empty *)
+                        [] => next_no_append ls (* line is empty *)
+                      | "ORIG" :: drop1 => (
+                          handle_orig drop1;
+                          next l ls  (* we'll need the ORIG later too *)
+                        )
                       | s1 :: drop1 =>
                           (
                           if String.size s1 > 0 andalso String.sub (s1, 0) = #"*" then
-                            next ls (* ignore line if asterisk at start *)
+                            next_no_append ls (* ignore line if asterisk at start *)
                           else
                             (case drop1 of
                                [] => (* line has only one string *)
                                  (case H.find op_table s1 of
                                     SOME f => (
-                                      print "Case 1: ";
-                                      f l;  (* call f on the whole line *)
-                                      next ls
+                                      next l ls
                                     )
                                     | NONE => raise (Missing_symbol line_no))
+                             | "ORIG" :: drop2 => (
+                                 handle_orig drop2;
+                                 next drop1 ls  (* we keep the ORIG *)
+                               )
                              | s2 :: _ =>
                                  (case H.find op_table s1 of
+                                    (* first word is an instruction *)
                                     SOME f =>
                                       (case H.find op_table s2 of
+                                         (* symbol name is an instruction name -- bad *)
                                          SOME g => raise (Bad_symbol (s1, line_no))
                                        | NONE =>
-                                           print "Case 2: ";
-                                           f l; (* no symbol, just assemble line *)
-                                           next ls)
+                                           (* we will assemble full line later *)
+                                           next l ls)
                                   | NONE =>
                                       (case H.find op_table s2 of
                                          SOME f => (
                                            add_symbol s1;
-                                           print "Case 3: ";
-                                           f drop1; (* assemble line without symbol *)
-                                           next ls
+                                           (* later we'll assemble line without the symbol *)
+                                           next drop1 ls
                                          )
                                        | NONE =>
                                            raise (Missing_symbol line_no))))))
@@ -387,16 +421,8 @@ struct
         print (Format.format "%s %s %s\n"
                              [Format.STR addr, Format.STR i_part, Format.STR f_part])
     in
-      iter 1 list_list;
+      List.map nop_asm (first_pass [] 1 list_list);
       H.appi print_entry symbols;
-      print_triple (split_string "2000" 0);
-      print_triple (split_string "HI" 0);
-      print_triple (split_string "PRIME,5" 0);
-      print_triple (split_string "TITLE(PRINTER)" 0);
-      print_triple (split_string "\"HELLO\"" 0);
-      print_triple (split_string "BUF0+10" 0);
-      print_triple (split_string "0,4(1:4)" 0);
-      print_triple (split_string "BUF+2400,2(18)" 0);
       (memory, !start_loc)
     end
     (* print appropriate error message then signal that assembly has failed *)
@@ -424,7 +450,7 @@ struct
         raise Assembler_error
       )
     | Parse_error i => (
-        print (Format.format "Error parsing address string on line %d.\n"
+        print (Format.format "Error parsing line %d.\n"
                              [Format.INT i]);
         raise Assembler_error
       )
